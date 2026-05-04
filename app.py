@@ -54,10 +54,7 @@ def handle_message_logic(event, knowledge_base):
         user_name = check_res.get("userName", "同級生")
 
         if is_registered:
-            # 【登録済み】configシートの知識を使ってAIが回答
-            settings_res = requests.post(GAS_URL, json={"action": "getSettings"}).json()
-            knowledge_base = settings_res.get("info", "詳細は現在確認中です。")
-
+           
             prompt = f"""
             あなたは「天一（てんいち）同窓会」の専用AIボットです。
             30歳の節目に集まる大切な友人たちを、明るく、親切にサポートしてください。
@@ -107,5 +104,6 @@ def handle_message_logic(event, knowledge_base):
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    # 5000 ではなく環境変数 PORT (Renderのデフォルトは10000) を参照
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
