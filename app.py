@@ -8,7 +8,7 @@ import google.generativeai as genai
 
 app = Flask(__name__)
 
-# RenderのEnvironmentタブで設定した名前と一字一句合わせる必要があります
+# 環境変数の読み込み
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -17,7 +17,7 @@ GAS_URL = os.environ.get('GAS_URL')
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# Geminiの設定（エラーになっても止まらないようにtryを入れています）
+# Geminiの設定（今回は合言葉以外では使いませんが、念のため初期化のみ維持）
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
@@ -51,21 +51,17 @@ def handle_message(event):
                 "userId": user_id,
                 "message": "参加登録"
             }
-            # スプレッドシートへ送信
+            # スプレッドシート（GAS）へ送信
             requests.post(GAS_URL, json=payload)
             reply_text = f"【認証完了】\n{display_name}さん、名簿に登録しました！当日を楽しみにしています。"
         
         else:
-            # 3. AIに返信を考えてもらう
-            try:
-                response = model.generate_content(f"あなたは同窓会の幹事です。親しみやすく短めに回答して。質問：{user_message}")
-                reply_text = response.text
-            except Exception:
-                reply_text = "（AIが少し休憩中です。登録したい場合は「1995天一同窓会」と送ってください！）"
+            # 合言葉が違う場合は、AIに渡さず一律でエラーメッセージを返す
+            reply_text = "パスワードが間違っています。受信したメールに記載されたパスワードを確認してください。"
 
     except Exception as e:
         print(f"Error: {e}")
-        reply_text = "エラーが発生しました。合言葉が正しいか確認してください。"
+        reply_text = "システムエラーが発生しました。時間を置いて再度お試しください。"
 
     line_bot_api.reply_message(
         event.reply_token,
@@ -73,6 +69,5 @@ def handle_message(event):
     )
 
 if __name__ == "__main__":
-    # Renderで起動するために必要な設定
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
