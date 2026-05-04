@@ -2,52 +2,52 @@ import os
 import requests
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import google.generativeai as genai
 
 app = Flask(__name__)
 
-# 環境変数の読み込み
+# --- 環境変数の読み込み ---
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 GAS_URL = os.environ.get('GAS_URL')
 
-# API初期化
+# --- API初期化 ---
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
-
-# Gemini初期化
 genai.configure(api_key=GEMINI_API_KEY)
-# 'models/' を頭に付け、最新の指定方法に変更します
-# 画像の右上に表示されている正確なIDに書き換えます
-model = genai.GenerativeModel('gemini-3-flash-preview')
+model = genai.GenerativeModel('gemini-1.5-flash') # 安定版の名称に変更
 
-@app.route("/webhook", methods=['POST']) # /callback から /webhook に変更
+# --- 1. ヘルスチェック用ルート (これがないとNot Foundになります) ---
+@app.route("/", methods=['GET'])
+def index():
+    return "AI Bot is running", 200
+
+# --- 2. LINE Webhook受信用ルート ---
+@app.route("/webhook", methods=['POST'])
 def webhook():
-    # GASからのリクエストを処理
     data = request.get_json()
     if not data:
         abort(400)
         
-    # GASから送られてきた情報を取得
     events = data.get('events', [])
-    knowledge_base = data.get('knowledgeBase', "詳細は現在確認中です。")
+    knowledge_base = data.get('knowledgeBase', "詳細は調整中です。")
 
     for event in events:
-        if event['type'] == 'message' and event['message']['type'] == 'text':
+        if event.get('type') == 'message' and event.get('message', {}).get('type') == 'text':
             handle_message_logic(event, knowledge_base)
             
     return 'OK'
 
+# --- 3. メインロジック ---
 def handle_message_logic(event, knowledge_base):
     user_message = event['message']['text']
     user_id = event['source']['userId']
     reply_token = event['replyToken']
     
     try:
-        # GASにユーザーの登録状況を問い合わせ
+        # GASへ状況確認
         check_res = requests.post(GAS_URL, json={"userId": user_id, "action": "check"}).json()
         is_registered = check_res.get("registered", False)
         has_id_only = check_res.get("hasIdOnly", False)
@@ -84,26 +84,22 @@ def handle_message_logic(event, knowledge_base):
             reply_text = response.text
         
         elif user_message == "1995天一同窓会":
-            # 【未登録：ステップ1】合言葉が一致
             requests.post(GAS_URL, json={"userId": user_id, "action": "register"})
-            reply_text = "【パスワード認証成功】\nありがとうございます！本人確認のため、あなたの「お名前（フルネーム）」をこのチャットに送信してください。"
+            reply_text = "パスワードを認証しました！本人確認のため、フルネームを送信してください。"
         
         elif has_id_only:
-            # 【未登録：ステップ2】名前を送信してきた
             requests.post(GAS_URL, json={"userId": user_id, "realName": user_message, "action": "updateName"})
-            reply_text = f"ありがとうございます！「{user_message}」さんで登録しました。同窓会について知りたいことはありますか？"
+            reply_text = f"ありがとうございます！{user_message}さんとして登録しました。同窓会について何でも聞いてくださいね！"
         
         else:
-            # 【未登録：合言葉待ち】
-            reply_text = "パスワードが間違っています。正しい合言葉を送信してください。"
+            reply_text = "同窓会ボットです！利用するには正しい合言葉を送信してください。"
 
     except Exception as e:
         print(f"Error: {e}")
-        reply_text = "システムエラーが発生しました。しばらく経ってから再度お試しください。"
+        reply_text = "少し疲れちゃったみたい。時間を置いてまた話しかけてね！"
 
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+    line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
-    # Render環境では PORT 環境変数が必須です
-    port = int(os.environ.get("PORT", 10000)) 
-    app.run(host="0.0.0.0", port=port, debug=False)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
