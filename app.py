@@ -24,26 +24,34 @@ genai.configure(api_key=GEMINI_API_KEY)
 # 画像の右上に表示されている正確なIDに書き換えます
 model = genai.GenerativeModel('gemini-3-flash-preview')
 
-@app.route("/callback", methods=['POST'])
-def callback():
-    signature = request.headers.get('X-Line-Signature')
-    body = request.get_data(as_text=True)
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
+@app.route("/webhook", methods=['POST']) # /callback から /webhook に変更
+def webhook():
+    # GASからのリクエストを処理
+    data = request.get_json()
+    if not data:
         abort(400)
+        
+    # GASから送られてきた情報を取得
+    events = data.get('events', [])
+    knowledge_base = data.get('knowledgeBase', "詳細は現在確認中です。")
+
+    for event in events:
+        if event['type'] == 'message' and event['message']['type'] == 'text':
+            handle_message_logic(event, knowledge_base)
+            
     return 'OK'
 
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_message = event.message.text
-    user_id = event.source.user_id
+def handle_message_logic(event, knowledge_base):
+    user_message = event['message']['text']
+    user_id = event['source']['userId']
+    reply_token = event['replyToken']
     
     try:
         # GASにユーザーの登録状況を問い合わせ
         check_res = requests.post(GAS_URL, json={"userId": user_id, "action": "check"}).json()
         is_registered = check_res.get("registered", False)
         has_id_only = check_res.get("hasIdOnly", False)
+        user_name = check_res.get("userName", "同級生")
 
         if is_registered:
             # 【登録済み】configシートの知識を使ってAIが回答
