@@ -104,6 +104,6 @@ def handle_message_logic(event, knowledge_base):
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
-    # 5000 ではなく環境変数 PORT (Renderのデフォルトは10000) を参照
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    # Render環境では PORT 環境変数が必須です
+    port = int(os.environ.get("PORT", 10000)) 
+    app.run(host="0.0.0.0", port=port, debug=False)
