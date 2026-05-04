@@ -21,7 +21,8 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 # Gemini初期化
 genai.configure(api_key=GEMINI_API_KEY)
 # 'models/' を頭に付け、最新の指定方法に変更します
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+# 画像の右上に表示されている正確なIDに書き換えます
+model = genai.GenerativeModel('gemini-3-flash-preview')
 
 @app.route("/callback", methods=['POST'])
 def callback():
